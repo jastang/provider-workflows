@@ -56,9 +56,7 @@ jobs:
 
   get-example-list:
     if: ${{ (github.event.comment.author_association == 'OWNER' ||
-      github.event.comment.author_association == 'MEMBER' ||
-      github.event.comment.author_association == 'COLLABORATOR' ||
-      github.event.comment.author_association == 'CONTRIBUTOR' ) &&
+      github.event.comment.author_association == 'MEMBER' ) &&
       github.event.issue.pull_request &&
       contains(github.event.comment.body, inputs.trigger-keyword ) }}
     runs-on: ${{ inputs.runs-on }}
@@ -116,9 +114,7 @@ jobs:
 
   uptest:
     if: ${{ (github.event.comment.author_association == 'OWNER' || 
-      github.event.comment.author_association == 'MEMBER' || 
-      github.event.comment.author_association == 'COLLABORATOR' || 
-      github.event.comment.author_association == 'CONTRIBUTOR' ) &&
+      github.event.comment.author_association == 'MEMBER' ) &&
       github.event.issue.pull_request &&
       contains(github.event.comment.body, inputs.trigger-keyword ) }}
     runs-on: ${{ inputs.runs-on }}
