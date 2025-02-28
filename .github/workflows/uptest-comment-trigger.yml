@@ -46,15 +46,15 @@ on:
 
 jobs:
   check-permissions:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     outputs:
       permission: ${{ steps.check-permissions.outputs.permission }}
     steps:
       - name: Get Commenter Permissions
         id: check-permissions
         run: |
-          echo "Trigger keyword: '/test-examples'"
-          echo "Go version: ${{ env.GO_VERSION }}"
+          echo "Trigger keyword: ${{ inputs.trigger-keyword }}"
+          echo "Go version: ${{ inputs.go-version }}"
 
           REPO=${{ github.repository }}
           COMMENTER=${{ github.event.comment.user.login }}
@@ -70,7 +70,7 @@ jobs:
 
   get-example-list:
     needs: check-permissions
-    if: ${{ (needs.check-permissions.outputs.permission == 'admin' || needs.check-permissions.outputs.permission == 'write') && github.event.issue.pull_request != null && contains(github.event.comment.body, '/test-examples')}}
+    if: ${{ (needs.check-permissions.outputs.permission == 'admin' || needs.check-permissions.outputs.permission == 'write') && github.event.issue.pull_request && contains(github.event.comment.body, '/test-examples')}}
     runs-on: ${{ inputs.runs-on }}
     outputs:
       example_list: ${{ steps.get-example-list-name.outputs.example-list }}
@@ -128,8 +128,8 @@ jobs:
     needs:
       - check-permissions
       - get-example-list
-    if: ${{ (needs.check-permissions.outputs.permission == 'admin' || needs.check-permissions.outputs.permission == 'write') && github.event.issue.pull_request != null && contains(github.event.comment.body, '/test-examples')}}
-    runs-on: ubuntu-latest
+    if: ${{ (needs.check-permissions.outputs.permission == 'admin' || needs.check-permissions.outputs.permission == 'write') && github.event.issue.pull_request && contains(github.event.comment.body, '/test-examples')}}
+    runs-on: ${{ inputs.runs-on }}
 
     steps:
       - name: Cleanup Disk
