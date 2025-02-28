@@ -70,7 +70,7 @@ jobs:
 
   get-example-list:
     needs: check-permissions
-    if: ${{ (needs.check-permissions.outputs.permission == 'admin' || needs.check-permissions.outputs.permission == 'write') && github.event.issue.pull_request && contains(github.event.comment.body, '/test-examples')}}
+    if: ${{ (needs.check-permissions.outputs.permission == 'admin' || needs.check-permissions.outputs.permission == 'maintain') && github.event.issue.pull_request && contains(github.event.comment.body, '/test-examples')}}
     runs-on: ${{ inputs.runs-on }}
     outputs:
       example_list: ${{ steps.get-example-list-name.outputs.example-list }}
@@ -128,7 +128,7 @@ jobs:
     needs:
       - check-permissions
       - get-example-list
-    if: ${{ (needs.check-permissions.outputs.permission == 'admin' || needs.check-permissions.outputs.permission == 'write') && github.event.issue.pull_request && contains(github.event.comment.body, '/test-examples')}}
+    if: ${{ (needs.check-permissions.outputs.permission == 'admin' || needs.check-permissions.outputs.permission == 'maintain') && github.event.issue.pull_request && contains(github.event.comment.body, '/test-examples')}}
     runs-on: ${{ inputs.runs-on }}
 
     steps:
