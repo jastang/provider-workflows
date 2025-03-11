@@ -51,7 +51,7 @@ env:
   # Registry/Org names
   CROSSPLANE_REGORG: 'ghcr.io/crossplane-contrib' # xpkg.crossplane.io/crossplane-contrib
   UPBOUND_REGORG: 'xpkg.upbound.io/crossplane-contrib'
-  XPKG_CROSSPLANE_REGORG: 'xpkg.crossplane.io/crossplane-contrib'
+  CROSSPLANE_PROXY_REGORG: 'xpkg.crossplane.io/crossplane-contrib'
 
   # Upbound registry specific variables
   UP_DOMAIN: "https://upbound.io"
@@ -153,7 +153,7 @@ jobs:
           if [ $num_packages -gt 10 ]; then
             num_packages=10
           fi
-          make -j $num_packages SUBPACKAGES="${{ steps.packages.outputs.target }}" XPKG_REG_ORGS="${{ env.CROSSPLANE_REGORG }}" XPKG_REG_ORGS_NO_PROMOTE="${{ env.CROSSPLANE_REGORG }}" CONFIG_DEPENDENCY_REG_ORG="${{ env.XPKG_CROSSPLANE_REGORG }}" BRANCH_NAME="main" ${{ inputs.version != '' && format('VERSION={0}', inputs.version) || '' }} build.all
+          make -j $num_packages SUBPACKAGES="${{ steps.packages.outputs.target }}" XPKG_REG_ORGS="${{ env.CROSSPLANE_REGORG }}" XPKG_REG_ORGS_NO_PROMOTE="${{ env.CROSSPLANE_REGORG }}" CONFIG_DEPENDENCY_REG_ORG="${{ env.CROSSPLANE_PROXY_REGORG }}" BRANCH_NAME="main" ${{ inputs.version != '' && format('VERSION={0}', inputs.version) || '' }} build.all
           echo "num_packages=$num_packages" >> $GITHUB_OUTPUT
         env:
           # We're using docker buildx, which doesn't actually load the images it
@@ -162,7 +162,7 @@ jobs:
 
       - name: Publish Artifacts
         run: |
-          make -j ${{ steps.build_artifacts.outputs.num_packages }} SUBPACKAGES="${{ steps.packages.outputs.target }}" XPKG_REG_ORGS="${{ env.CROSSPLANE_REGORG }}" XPKG_REG_ORGS_NO_PROMOTE="${{ env.CROSSPLANE_REGORG }}" CONFIG_DEPENDENCY_REG_ORG="${{ env.XPKG_CROSSPLANE_REGORG }}" CONCURRENCY="${{ inputs.concurrency }}" BRANCH_NAME="main" ${{ inputs.version != '' && format('VERSION={0}', inputs.version) || '' }} publish
+          make -j ${{ steps.build_artifacts.outputs.num_packages }} SUBPACKAGES="${{ steps.packages.outputs.target }}" XPKG_REG_ORGS="${{ env.CROSSPLANE_REGORG }}" XPKG_REG_ORGS_NO_PROMOTE="${{ env.CROSSPLANE_REGORG }}" CONFIG_DEPENDENCY_REG_ORG="${{ env.CROSSPLANE_PROXY_REGORG }}" CONCURRENCY="${{ inputs.concurrency }}" BRANCH_NAME="main" ${{ inputs.version != '' && format('VERSION={0}', inputs.version) || '' }} publish
 
   mirror-to-xpkg-upbound-io:
     needs: publish-artifacts
