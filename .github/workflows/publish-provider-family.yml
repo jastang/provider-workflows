@@ -37,6 +37,10 @@ on:
         required: false
         type: boolean
         default: false
+      runs-on:
+        default: ubuntu-latest
+        required: false
+        type: string
     secrets:
       GHCR_PAT:
         required: true
@@ -59,7 +63,7 @@ env:
 
 jobs:
   index:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     outputs:
       indices: ${{ steps.calc.outputs.indices }}
     steps:
@@ -73,7 +77,7 @@ jobs:
         index: ${{ fromJSON(needs.index.outputs.indices) }}
 
     needs: index
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - name: Cleanup Disk
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
@@ -166,7 +170,7 @@ jobs:
 
   mirror-to-xpkg-upbound-io:
     needs: publish-artifacts
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runs-on }}
     steps:
       - name: Setup QEMU
         uses: docker/setup-qemu-action@2b82ce82d56a2a04d2637cd93a637ae1b359c0a7 # v2
