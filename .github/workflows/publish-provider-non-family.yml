@@ -26,29 +26,40 @@ on:
         default: ubuntu-latest
         required: false
         type: string
-      mirror-to-upbound-registry:
-        description: "If set to true, the xpkg will be mirrored to xpkg.upbound.io"
+      mirror:
+        description: "If set to true, the image will be mirrored to the specified mirror-registry."
         required: false
         type: boolean
         default: true
+      mirror-registry:
+        description: "Additional registry host to mirror images to."
+        required: false
+        type: string
+        default: "xpkg.upbound.io"
+      registry_org:
+        description: "The organization to publish to in the targeted registries."
+        required: false
+        type: string
+        default: "crossplane-contrib"
     secrets:
       GHCR_PAT:
         required: true
-      XPKG_UPBOUND_TOKEN:
-        required: false # still needed if inputs.mirror-to-upbound-registry is true
+      # Additional credentials are required if inputs.mirror is set, defaulting to the common target of xpkg.upbound.io.
+      # To support an arbitrary number of additional registries, the job inputs should be refactored to accept a single string input in JSON format that can be parsed in a job step.
+      # This approach works around GitHub Actions' 10-input limit: https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions
+      XPKG_MIRROR_TOKEN:
+        required: false
+      XPKG_MIRROR_ACCESS_ID:
+        required: false
 
 env:
   # Common versions
   DOCKER_BUILDX_VERSION: 'v0.20.1'
-  UP_VERSION: 'v0.37.1'
+  UP_VERSION: 'v0.39.0'
 
-  # Registry/Org names
-  CROSSPLANE_REGORG: 'ghcr.io/crossplane-contrib' # xpkg.crossplane.io/crossplane-contrib
-  UPBOUND_REGORG: 'xpkg.upbound.io/crossplane-contrib'
-
-  # Upbound registry specific variables
-  UP_DOMAIN: "https://upbound.io"
-  UP_TOKEN: ${{ secrets.XPKG_UPBOUND_TOKEN }}
+  # Registry/Org names, defaulting to `crossplane-contrib`
+  CROSSPLANE_REGORG: 'ghcr.io/${{ inputs.registry_org }}'
+  MIRROR_REGORG: '${{ inputs.mirror-registry }}/${{ inputs.registry_org }}'
 
 jobs:
   publish-artifacts:
@@ -132,22 +143,25 @@ jobs:
         run: |
           make -j XPKG_REG_ORGS="${{ env.CROSSPLANE_REGORG }}" XPKG_REG_ORGS_NO_PROMOTE="${{ env.CROSSPLANE_REGORG }}" BRANCH_NAME="main" ${{ inputs.version != '' && format('VERSION={0}', inputs.version) || '' }} publish
 
-  mirror-to-xpkg-upbound-io:
+  check-prerequisites:
     needs: publish-artifacts
     runs-on: ${{ inputs.runs-on }}
-    if: ${{ inputs.mirror-to-upbound-registry }}
+    outputs:
+      should_mirror: ${{ steps.set.outputs.should_mirror }}
     steps:
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@2b82ce82d56a2a04d2637cd93a637ae1b359c0a7 # v2
-        with:
-          platforms: all
+      - id: set
+        run: |
+          should_mirror=false
+          if [[ -n "${{ secrets.XPKG_MIRROR_ACCESS_ID }}" && -n "${{ secrets.XPKG_MIRROR_TOKEN }}" && -n "${{ inputs.mirror }}" ]]; then
+            should_mirror=true
+          fi
+          echo "should_mirror=${should_mirror}" >> $GITHUB_OUTPUT
 
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@885d1462b80bc1c1c7f0b00334ad271f09369c55 # v2
-        with:
-          version: ${{ env.DOCKER_BUILDX_VERSION }}
-          install: true
-
+  mirror-to-additional-registry:
+    needs: check-prerequisites
+    runs-on: ${{ inputs.runs-on }}
+    if: ${{ needs.check-prerequisites.outputs.should_mirror == 'true' }}
+    steps:
       - name: Setup crane
         # crane will inherit credentials from `docker login`
         uses: imjasonh/setup-crane@v0.4
@@ -155,32 +169,13 @@ jobs:
       - name: Validate crane installation
         run: crane version
 
-      - name: Up Login
-        run: |
-          curl -fsSLo /tmp/up --create-dirs 'https://cli.upbound.io/stable/${{ env.UP_VERSION }}/bin/linux_amd64/up' && \
-          chmod +x /tmp/up && \
-          /tmp/up login
-
-      - name: Install docker-credential-up
-        run: |
-          curl -fsSLo /tmp/docker-credential-up --create-dirs 'https://cli.upbound.io/stable/${{ env.UP_VERSION }}/bin/linux_amd64/docker-credential-up' && \
-          chmod +x /tmp/docker-credential-up && \
-          sudo mv /tmp/docker-credential-up /usr/local/bin/docker-credential-up
-
-      - name: Get creds
-        run: |
-          echo "${{ env.UP_DOMAIN }}" | docker-credential-up get > $HOME/.up/up.token.json
-          echo "DOCKER_USERNAME=$(cat $HOME/.up/up.token.json | jq -r '.Username')" >> $GITHUB_ENV
-          echo "DOCKER_PWD=$(cat $HOME/.up/up.token.json | jq -r '.Secret')" >> $GITHUB_ENV
-
-      - name: Login to Upbound
+      - name: Login to Mirror Registry
         uses: docker/login-action@343f7c4344506bcbf9b4de18042ae17996df046d
-        if: env.DOCKER_USERNAME != ''
         with:
-          registry: "xpkg.upbound.io"
-          username: ${{ env.DOCKER_USERNAME }}
-          password: ${{ env.DOCKER_PWD }}
+          registry: ${{ inputs.mirror-registry }}
+          username: ${{ secrets.XPKG_MIRROR_ACCESS_ID }}
+          password: ${{ secrets.XPKG_MIRROR_TOKEN }}
 
-      - name: Mirror to xpkg.upbound.io
+      - name: Mirror to ${{ inputs.mirror-registry }}
         run: |
-          crane copy ${{ env.CROSSPLANE_REGORG }}/${{ inputs.repository }}:${{ inputs.version }} ${{ env.UPBOUND_REGORG }}/${{ inputs.repository }}:${{ inputs.version }} --allow-nondistributable-artifacts
+          crane copy ${{ env.CROSSPLANE_REGORG }}/${{ inputs.repository }}:${{ inputs.version }} ${{ env.MIRROR_REGORG }}/${{ inputs.repository }}:${{ inputs.version }} --allow-nondistributable-artifacts
