@@ -66,6 +66,10 @@ env:
   UP_DOMAIN: "https://upbound.io"
   UP_TOKEN: ${{ secrets.XPKG_UPBOUND_TOKEN }}
 
+  # retry configuration
+  RETRY_COUNT: 10
+  RETRY_DELAY: 30
+
 jobs:
   index:
     runs-on: ${{ inputs.runs-on }}
@@ -178,17 +182,6 @@ jobs:
     runs-on: ${{ inputs.runs-on }}
     if: ${{ inputs.mirror-to-upbound-registry }}
     steps:
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@2b82ce82d56a2a04d2637cd93a637ae1b359c0a7 # v2
-        with:
-          platforms: all
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@885d1462b80bc1c1c7f0b00334ad271f09369c55 # v2
-        with:
-          version: ${{ env.DOCKER_BUILDX_VERSION }}
-          install: true
-
       - name: Setup crane
         # crane will inherit credentials from `docker login`
         uses: imjasonh/setup-crane@v0.4
@@ -225,10 +218,28 @@ jobs:
       - name: Mirror to xpkg.upbound.io
         run: |
           for subpackage in ${{ inputs.subpackages }}; do
-              if [ "$subpackage" != "config" ]; then
-                  crane copy ${{ env.CROSSPLANE_REGORG }}/${{ inputs.repository }}-$subpackage:${{ inputs.version }} ${{ env.UPBOUND_REGORG }}/${{ inputs.repository }}-$subpackage:${{ inputs.version }} --allow-nondistributable-artifacts
-              elif [ "$subpackage" == "config" ]; then
-                  p=$(echo ${{ inputs.repository }} | sed 's/provider-//')
-                  crane copy ${{ env.CROSSPLANE_REGORG }}/provider-family-$p:${{ inputs.version }} ${{ env.UPBOUND_REGORG }}/provider-family-$p:${{ inputs.version }} --allow-nondistributable-artifacts
+            p="${{ inputs.repository }}-$subpackage"
+            if [ "$subpackage" = "config" ]; then
+              p="provider-family-$(echo ${{ inputs.repository }} | sed 's/provider-//')"
+            fi
+
+            attempt=1
+            success=0
+            while [ $attempt -le ${{ env.RETRY_COUNT }} ]; do
+              echo "Attempt $attempt/${{ env.RETRY_COUNT }}: copying ${{ env.CROSSPLANE_REGORG }}/$p:${{ inputs.version }} -> ${{ env.UPBOUND_REGORG }}/$p:${{ inputs.version }}"
+              if crane copy "${{ env.CROSSPLANE_REGORG }}/$p:${{ inputs.version }}" "${{ env.UPBOUND_REGORG }}/$p:${{ inputs.version }}" --allow-nondistributable-artifacts; then
+                success=1
+                break
               fi
+              attempt=$((attempt + 1))
+              if [ $attempt -le ${{ env.RETRY_COUNT }} ]; then
+                echo "Copy failed, retrying in ${{ env.RETRY_DELAY }}s..."
+                sleep ${{ env.RETRY_DELAY }}
+              fi
+            done
+
+            if [ $success -ne 1 ]; then
+              echo "ERROR: Failed to mirror $p after ${{ env.RETRY_COUNT }} attempts." >&2
+              exit 1
+            fi
           done
